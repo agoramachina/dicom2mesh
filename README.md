@@ -6,7 +6,10 @@ Turn the DICOM files from a CT (or MRI) disc into a 3D model you can view, share
 DICOM slices ──► 3D volume ──► segmentation ──► surface mesh ──► cleanup ──► STL / GLB / OBJ / PLY
 ```
 
-One self-contained Python script. It works best for **bone from CT** (e.g. a skull from a head CT). MRI works only roughly for now; see [MRI](#mri) below.
+Two scripts:
+
+- **`dicom2mesh.py`**: **bone from CT** (e.g. a skull from a head CT). Threshold-based, fast, no ML.
+- **`brain2mesh.py`**: **a brain surface from a T1 MRI** (e.g. MPRAGE). Uses small ML models to find the brain; see [Brain from MRI](#brain-from-mri).
 
 > **Not a medical device.** This is a hobby / proof-of-concept tool. Don't use it for diagnosis, surgical planning, or anything clinical.
 
@@ -22,7 +25,7 @@ You only need [**uv**](https://docs.astral.sh/uv/). It fetches Python and every 
 | **macOS** | `curl -LsSf https://astral.sh/uv/install.sh \| sh` or `brew install uv` |
 | **Linux** | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 
-Then download `dicom2mesh.py` (and optionally `preview.py`) into a folder and open a terminal there.
+Then download the scripts into **one folder** (`brain2mesh.py` reuses `dicom2mesh.py`, so keep them together) and open a terminal there.
 
 ---
 
@@ -131,7 +134,34 @@ CT values are calibrated: air is −1000 HU and water is 0 HU on every scanner. 
 
 ### MRI
 
-MRI brightness has **no fixed scale**. It changes with the scanner, the sequence, and even position within the scan, and bone is *dark*. So a single threshold only gives a rough result. If you want to experiment, use `--no-body` and choose a threshold from the `range=[...]` printed when the series loads. A proper **brain** model needs real tissue segmentation, which this script doesn't do (yet).
+MRI brightness has **no fixed scale**. It changes with the scanner, the sequence, and even position within the scan, and bone is *dark*. So a single threshold only gives a rough result. If you want to experiment, use `--no-body` and choose a threshold from the `range=[...]` printed when the series loads. **For a brain, use [`brain2mesh.py`](#brain-from-mri) instead.**
+
+---
+
+## Brain from MRI
+
+`brain2mesh.py` makes a **brain surface with its folds** (the *pial* surface: cerebrum, cerebellum, and brainstem) from a **3D T1-weighted MRI**. On a disc, that's usually a series with `MPRAGE`, `T1 3D`, `SPGR`, or `BRAVO` in its name, about 1 mm thick. Scans with contrast (gadolinium) work too.
+
+```
+uv run brain2mesh.py C:\scans\head-mri                       # list the series
+uv run brain2mesh.py C:\scans\head-mri -s 10 -o brain.stl -o brain.glb
+```
+
+How it works:
+
+1. **Skull stripping** and **tissue labelling** with two [brainchop](https://github.com/neuroneural/brainchop-cli) models (`mindgrab`, then `subcortical`). These are small MeshNet networks, trained on synthetic scans so they don't depend on one particular contrast. They download automatically from GitHub on first use.
+2. **Placing the surface:** the labels decide *what* is brain; the T1 brightness decides *exactly where* its edge is. The script contours halfway between grey-matter and CSF brightness, measured on your own scan, so the folds come out crisp instead of voxel-lumpy. The surface is only allowed to move 1 voxel outward from the labels, so blood vessels and the brain's outer membrane don't get stuck to it.
+3. The same cleanup, smoothing, and export steps as `dicom2mesh.py`.
+
+| Option | Default | What it does |
+|---|---|---|
+| `--sigma` | `0.7` | Pre-smoothing of the T1 in mm. Higher = smoother folds |
+| `--smooth` | `15` | Mesh smoothing iterations |
+| `--reach` | `1` | Voxels the surface may move outward from the labels (higher = fuller, but more debris) |
+| `--device` | auto | Force brainchop's compute device, e.g. `--device CPU` |
+| `--keep DIR` | | Keep the intermediate NIfTI files (stripped scan, labels) |
+
+**Hardware: you effectively need a GPU.** brainchop picks one automatically. On an NVIDIA laptop GPU with ~3 GB free, both models took about 30 seconds in total. If you see `out of GPU memory`, close other GPU-heavy apps (3D viewers, slicers, games) and try again. `--device CPU` exists, but in testing (brainchop 0.2.5) the CPU run hadn't finished even the *first* model after 20 minutes, running on a single core.
 
 ---
 
@@ -180,10 +210,16 @@ Compressed discs (JPEG Lossless, JPEG 2000, JPEG-LS, RLE) are supported via GDCM
 
 ## Limitations
 
-- Threshold-based: great for CT bone, rough for MRI; no tissue classification.
+- `dicom2mesh.py` is threshold-based: great for CT bone, rough for MRI.
 - Very thin bone (e.g. eye-socket walls) can come out with holes, which is normal for CT skull models.
+- `brain2mesh.py` makes one surface for the whole brain: the hemispheres aren't split, and there's no separate white-matter surface yet. At 1 mm resolution, the tightest folds can come out bridged. It's a faithful sculpture of your brain, not a research-grade reconstruction like FreeSurfer.
+- brainchop's `subcortical` model ships without label names; the two this script relies on (cortex, ventricles) were identified by inspecting their size, position, and brightness.
 - Enhanced multi-frame DICOM isn't supported yet.
-- Tested end-to-end on Linux with one head CT (Siemens) and its reformats. Dependencies are verified to install from prebuilt wheels on Windows x64, macOS (Intel & Apple Silicon), and Linux x64/ARM for Python 3.10–3.14, but it hasn't yet been run on Windows or macOS hardware. Reports welcome.
+- Tested end-to-end on Linux with one head CT (Siemens) and its reformats, and one contrast-enhanced 3 T MPRAGE (Siemens) on an NVIDIA GPU. Dependencies are verified to install from prebuilt wheels on Windows x64, macOS (Intel & Apple Silicon), and Linux x64/ARM for Python 3.10–3.14, but neither script has been run on Windows or macOS hardware yet. Reports welcome.
+
+## Credits
+
+Brain segmentation uses [brainchop](https://github.com/neuroneural/brainchop-cli) (MIT) and its MeshNet models, from the neuroneural group.
 
 ## How this was made
 
