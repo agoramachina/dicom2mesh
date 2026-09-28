@@ -148,7 +148,7 @@ MRI brightness has **no fixed scale**. It changes with the scanner, the sequence
 - **DICOM files contain personal data**: name, date of birth, patient ID, the facility, dates. **Never upload or commit your scan files.**
 - The meshes this script writes contain **no metadata**, only geometry.
 - But geometry can identify you as well: a **skin-surface** model (`-t -300`) is your face. Skull models are much less identifying, but still yours to decide about.
-- The included `.gitignore` is an allow-list: only the source files can be committed, so scans and models can't slip into a repo by accident.
+- Keep scans and generated models **outside** this folder. The included `.gitignore` also blocks common mesh and DICOM file types as a backstop, but many discs use extensionless file names that no pattern can catch.
 
 ---
 

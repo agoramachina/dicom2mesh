@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+build/
+dist/
+
+# Generated models and previews
+*.stl
+*.glb
+*.gltf
+*.obj
+*.mtl
+*.ply
+*.3mf
+*_preview.png
+
+# Scan data contains personal information and must never be committed.
+# Patterns only catch named files: many discs use extensionless DICOM names
+# (e.g. IM00001), so keep scans outside the repo.
+*.dcm
+*.DCM
+DICOMDIR
+*.nii
+*.nii.gz
+
+# OS clutter (the last two also appear on patient discs)
+.DS_Store
+Thumbs.db
+desktop.ini
+autorun.inf
+AUTORUN.INF
